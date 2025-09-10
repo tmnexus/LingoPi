@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IoT Voice Bot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    body.light {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      color: #1f2937;
+    }
+    body.dark {
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+      color: #e5e7eb;
+    }
+    .glow-effect:hover {
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+      transform: translateY(-2px);
+    }
+    .mic-pulse {
+      animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 0.3; }
+      100% { transform: scale(1); opacity: 0.5; }
+    }
+    .connected::before {
+      content: '';
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 12px;
+      height: 12px;
+      background-color: #22c55e;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+    }
+    .header-shadow {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    button {
+      transition: all 0.3s ease;
+    }
+  </style>
+</head>
+<body class="text-gray-800 flex flex-col items-center min-h-screen light">
+  <!-- Header -->
+  <header class="w-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-md p-6 text-center relative header-shadow animate__animated animate__fadeInDown">
+    <h1 class="text-4xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+      <i class="fas fa-robot mr-2"></i> Multilingual Voice IoT Bot
+    </h1>
+    <div class="mt-4 flex gap-4 justify-center items-center">
+      <input id="ipInput" type="text" placeholder="Enter Pico IP (e.g., 192.168.x.x)"
+        class="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 w-72 text-center focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-300"
+      />
+      <button onclick="saveIP()" class="bg-blue-500 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-600 glow-effect">
+        <i class="fas fa-save mr-2"></i> Save
+      </button>
+      <button id="themeToggle" onclick="toggleTheme()" 
+        class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 glow-effect">
+        <i id="themeIcon" class="fas fa-moon"></i>
+      </button>
+    </div>
+    <div id="statusIndicator" class="absolute top-4 right-4 hidden connected"></div>
+  </header>
+
+  <!-- Control Tiles -->
+  <main class="flex-1 flex flex-col justify-center items-center gap-8 mt-10 px-4">
+    <!-- Forward -->
+    <button onclick="sendCommand('forward')" 
+      class="w-32 h-32 bg-blue-500 text-white rounded-2xl flex items-center justify-center text-4xl font-bold hover:bg-blue-600 glow-effect animate__animated animate__zoomIn">
+      <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Middle Row -->
+    <div class="flex gap-8">
+      <button onclick="sendCommand('left')" 
+        class="w-32 h-32 bg-indigo-500 text-white rounded-2xl flex items-center justify-center text-4xl font-bold hover:bg-indigo-600 glow-effect animate__animated animate__zoomIn">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+
+      <button onclick="sendCommand('stop')" 
+        class="w-32 h-32 bg-red-500 text-white rounded-2xl flex items-center justify-center text-4xl font-bold hover:bg-red-600 glow-effect animate__animated animate__zoomIn">
+        <i class="fas fa-stop"></i>
+      </button>
+
+      <button onclick="sendCommand('right')" 
+        class="w-32 h-32 bg-indigo-500 text-white rounded-2xl flex items-center justify-center text-4xl font-bold hover:bg-indigo-600 glow-effect animate__animated animate__zoomIn">
+        <i class="fas fa-arrow-right"></i>
+      </button>
+    </div>
+
+    <!-- Backward -->
+    <button onclick="sendCommand('backward')" 
+      class="w-32 h-32 bg-blue-500 text-white rounded-2xl flex items-center justify-center text-4xl font-bold hover:bg-blue-600 glow-effect animate__animated animate__zoomIn">
+      <i class="fas fa-arrow-down"></i>
+    </button>
+
+    <!-- Caption Area -->
+    <div id="captionArea" class="mt-8 w-96 p-6 bg-white/90 dark:bg-gray-800/90 rounded-xl text-center shadow-lg hidden animate__animated animate__fadeIn">
+      <p id="captionText" class="text-lg font-medium text-gray-700 dark:text-gray-300">Listening...</p>
+    </div>
+  </main>
+
+  <!-- Floating Mic -->
+  <div class="fixed bottom-10 right-10">
+    <button id="micBtn" onclick="toggleMic()" 
+      class="relative w-24 h-24 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-full flex items-center justify-center text-4xl shadow-2xl hover:from-blue-600 hover:to-indigo-600 glow-effect animate__animated animate__bounceIn">
+      <i class="fas fa-microphone"></i>
+      <span id="micPulse" class="absolute w-28 h-28 rounded-full bg-blue-400 opacity-50 hidden mic-pulse"></span>
+    </button>
+  </div>
+
+  <script>
+    let picoIP = localStorage.getItem("picoIP") || "";
+    document.getElementById("ipInput").value = picoIP;
+    const statusIndicator = document.getElementById("statusIndicator");
+    const captionArea = document.getElementById("captionArea");
+    const captionText = document.getElementById("captionText");
+    const pulse = document.getElementById("micPulse");
+    const themeToggle = document.getElementById("themeToggle");
+    const themeIcon = document.getElementById("themeIcon");
+    let recognition = null;
+
+    // Theme management
+    const currentTheme = localStorage.getItem("theme") || "light";
+    document.body.classList.add(currentTheme);
+    updateThemeIcon();
+
+    function toggleTheme() {
+      const newTheme = document.body.classList.contains("light") ? "dark" : "light";
+      document.body.classList.remove("light", "dark");
+      document.body.classList.add(newTheme);
+      localStorage.setItem("theme", newTheme);
+      updateThemeIcon();
+    }
+
+    function updateThemeIcon() {
+      themeIcon.className = document.body.classList.contains("dark") ? "fas fa-sun" : "fas fa-moon";
+    }
+
+    function saveIP() {
+      picoIP = document.getElementById("ipInput").value.trim();
+      localStorage.setItem("picoIP", picoIP);
+      alert("✅ Pico IP Saved: " + picoIP);
+      checkConnection();
+    }
+
+    async function checkConnection() {
+      if (!picoIP) {
+        statusIndicator.classList.add("hidden");
+        return;
+      }
+      try {
+        await axios.get(`http://${picoIP}/ping`, { timeout: 2000 });
+        statusIndicator.classList.remove("hidden");
+      } catch (e) {
+        statusIndicator.classList.add("hidden");
+      }
+    }
+
+    async function sendCommand(cmd) {
+      if (!picoIP) {
+        alert("❌ Please enter Pico IP first!");
+        return;
+      }
+      try {
+        await axios.get(`http://${picoIP}/${cmd}`, { timeout: 2000 });
+        console.log("Sent:", cmd);
+      } catch (e) {
+        alert("⚠️ Failed to send command! Check IP or connection.");
+        statusIndicator.classList.add("hidden");
+      }
+    }
+
+    function toggleMic() {
+      if (pulse.classList.contains("hidden")) {
+        pulse.classList.remove("hidden");
+        captionArea.classList.remove("hidden");
+        captionText.textContent = "Listening...";
+        startSpeechRecognition();
+        console.log("🎤 Mic Active");
+      } else {
+        pulse.classList.add("hidden");
+        captionArea.classList.add("hidden");
+        stopSpeechRecognition();
+        console.log("🎤 Mic Off");
+      }
+    }
+
+    function startSpeechRecognition() {
+      if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+        alert("⚠️ Speech recognition not supported in this browser!");
+        pulse.classList.add("hidden");
+        captionArea.classList.add("hidden");
+        return;
+      }
+
+      recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        captionText.textContent = transcript || "Listening...";
+
+        const command = transcript.toLowerCase();
+        if (command.includes("forward")) sendCommand("forward");
+        else if (command.includes("backward")) sendCommand("backward");
+        else if (command.includes("left")) sendCommand("left");
+        else if (command.includes("right")) sendCommand("right");
+        else if (command.includes("stop")) sendCommand("stop");
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        captionText.textContent = `Error: ${event.error}`;
+        if (event.error === "no-speech" || event.error === "aborted" || event.error === "network") {
+          setTimeout(() => {
+            if (!pulse.classList.contains("hidden")) {
+              recognition.start();
+            }
+          }, 1000);
+        } else {
+          pulse.classList.add("hidden");
+          captionArea.classList.add("hidden");
+          stopSpeechRecognition();
+        }
+      };
+
+      recognition.onend = () => {
+        if (!pulse.classList.contains("hidden")) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("Failed to restart recognition:", e);
+            pulse.classList.add("hidden");
+            captionArea.classList.add("hidden");
+            captionText.textContent = "Recognition stopped.";
+          }
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        console.error("Failed to start recognition:", e);
+        pulse.classList.add("hidden");
+        captionArea.classList.add("hidden");
+        captionText.textContent = "Failed to start recognition.";
+      }
+    }
+
+    function stopSpeechRecognition() {
+      if (recognition) {
+        try {
+          recognition.stop();
+        } catch (e) {
+          console.error("Failed to stop recognition:", e);
+        }
+        recognition = null;
+      }
+    }
+
+    checkConnection();
+  </script>
+</body>
+</html>
