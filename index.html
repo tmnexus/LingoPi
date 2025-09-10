@@ -161,23 +161,33 @@
         return;
       }
       try {
-        // Use a proxy to avoid CORS issues
-        const response = await fetch(`https://corsproxy.io/?http://${picoIP}:1014/ping`, {
+        // Direct request with CORS mode (will work with the modified Pico code)
+        const response = await fetch(`http://${picoIP}:1014/ping`, {
           method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          mode: 'cors'
         });
         
         if (response.ok) {
           statusIndicator.classList.remove("hidden");
+          console.log("Connection successful");
         } else {
           statusIndicator.classList.add("hidden");
+          console.log("Connection failed");
         }
       } catch (e) {
         console.error("Connection check failed:", e);
         statusIndicator.classList.add("hidden");
+        
+        // Try with a different CORS proxy as fallback
+        try {
+          const proxyResponse = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`http://${picoIP}:1014/ping`)}`);
+          if (proxyResponse.ok) {
+            statusIndicator.classList.remove("hidden");
+            console.log("Connection successful via proxy");
+          }
+        } catch (proxyError) {
+          console.error("Proxy connection also failed:", proxyError);
+        }
       }
     }
 
@@ -187,26 +197,37 @@
         return;
       }
       try {
-        // Use a CORS proxy to bypass restrictions
-        const response = await fetch(`https://corsproxy.io/?http://${picoIP}:1014/${cmd}`, {
+        // Try direct connection first
+        const response = await fetch(`http://${picoIP}:1014/${cmd}`, {
           method: 'GET',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'application/json',
-          }
+          mode: 'cors'
         });
         
         if (response.ok) {
           console.log("Sent:", cmd);
-          const data = await response.json();
+          const data = await response.text();
           console.log("Response:", data);
         } else {
           throw new Error("HTTP error: " + response.status);
         }
       } catch (e) {
-        console.error("Failed to send command:", e);
-        alert("⚠️ Failed to send command! Check IP or connection.");
-        statusIndicator.classList.add("hidden");
+        console.error("Direct connection failed:", e);
+        
+        // Fallback to CORS proxy
+        try {
+          const proxyResponse = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(`http://${picoIP}:1014/${cmd}`)}`);
+          if (proxyResponse.ok) {
+            console.log("Command sent via proxy:", cmd);
+            const data = await proxyResponse.text();
+            console.log("Proxy response:", data);
+          } else {
+            throw new Error("Proxy failed");
+          }
+        } catch (proxyError) {
+          console.error("Proxy also failed:", proxyError);
+          alert("⚠️ Failed to send command! Check IP or connection.");
+          statusIndicator.classList.add("hidden");
+        }
       }
     }
 
@@ -302,7 +323,10 @@
       }
     }
 
-    checkConnection();
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      checkConnection();
+    });
   </script>
 </body>
 </html>
